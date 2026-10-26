@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS operators (
   name       VARCHAR(100) NOT NULL,
   color      VARCHAR(20) NOT NULL DEFAULT '#D2D9B6',
   country    VARCHAR(10) NOT NULL DEFAULT 'BF',
-  senders    TEXT NOT NULL DEFAULT '[]',
+  senders    TEXT NOT NULL,
   active     TINYINT(1) NOT NULL DEFAULT 1,
   created_at BIGINT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
