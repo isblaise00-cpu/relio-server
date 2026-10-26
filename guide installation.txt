@@ -1,0 +1,43 @@
+1. Préparer le téléphone (5 min)
+Insère la SIM qui reçoit les paiements et vérifie que la connexion Internet marche.
+Installe l’APK de SMS Gateway, téléchargé depuis les releases GitHub. Il faut autoriser les « sources inconnues ». Sur Android 15 et plus, désactive Play Protect le temps de l’installation, puis réactive-le.
+Au premier lancement, accepte toutes les permissions SMS. Celle de recevoir les SMS est indispensable.
+Dans les paramètres Android :
+Applis › SMS Gateway › Batterie › Sans restriction ;
+sur Tecno, Itel ou Infinix, autorise aussi le démarrage automatique de l’app ;
+Date et heure › automatique. Une heure fausse fait refuser les messages par le serveur.
+
+
+
+
+2. Connecter l’app au cloud (2 min)
+Dans l’app, active Cloud Server, puis appuie sur « Offline » pour qu’il devienne « Online ».
+Note l’identifiant et le mot de passe affichés.
+Ne touche pas à l’API URL dans les réglages.
+
+
+
+3. Déclarer le téléphone sur ton serveur (3 min)
+Si c’est une nouvelle SIM ou un nouveau marchand : crée le portefeuille avec le solde exact du moment, vérifié par USSD juste avant :
+POST /v1/wallets { "operator": "orange", "phone": "70XXXXXX", "balance": 25000 }
+Dans l’admin, ouvre la fiche du marchand, section SMS Gateway, et clique sur Connecter un téléphone.
+Copie l’URL du webhook et la clé de signature. La clé ne s’affiche qu’une fois.
+
+
+
+4. Relier l’app à ton serveur (5 min)
+Dans l’app : Réglages › Webhooks › Signing Key, puis colle la clé.
+Dans l’app : Réglages › Ping, à activer avec un intervalle de 5 à 10 minutes.
+Enregistre les 3 webhooks vers l’URL copiée, avec ta méthode habituelle : le site dashboard.sms-gate.app, ou
+npm run register-smsgate -- --user ID --password MDP --webhook-url https://ton-domaine.com/gateway/smsgate/dev_xxx
+Les trois événements : sms:received, system:ping, app:started.
+Vérifie dans l’app (Réglages › Webhooks › Registered webhooks) qu’ils sont bien 3.
+
+
+5. Tester (5 min)
+Ferme puis rouvre l’app. Dans l’admin, onglet Téléphones, il doit être « En ligne », avec sa SIM affichée.
+Crée une intention de 100 FCFA, puis paie-la réellement depuis un autre numéro. Dans « SMS reçus », le statut doit être matched.
+Si tu remplaces un ancien téléphone
+Dans l’admin, révoque l’ancien téléphone, surtout s’il a été perdu ou volé.
+Le nouveau téléphone aura de nouveaux identifiants cloud. Il faut donc refaire les étapes 2 à 5 en entier : nouvelle clé, nouveaux webhooks.
+Si c’est la même SIM, le portefeuille existe déjà. Vérifie juste que son solde est toujours à jour. Sinon, utilise POST /v1/wallets/:id/resync avec le solde réel.

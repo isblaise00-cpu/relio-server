@@ -1,0 +1,23 @@
+{
+  "name": "smspay-server",
+  "version": "0.1.0",
+  "description": "MVP : confirmation de paiements Mobile Money (Orange Money, Moov Money) par lecture des SMS de réception du marchand.",
+  "main": "src/server.js",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env src/server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env --watch src/server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test --test-concurrency=1 --test-timeout=60000 \"test/*.test.js\"",
+    "create-merchant": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env scripts/create-merchant.js",
+    "demo": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env examples/demo.js",
+    "webhook-receiver": "node examples/webhook-receiver.js",
+    "register-smsgate": "node scripts/register-smsgate-webhooks.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "mysql2": "^3.24.6"
+  }
+}

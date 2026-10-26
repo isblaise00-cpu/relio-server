@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relio — Back-office</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#000904;--surface:#0e1210;--surface2:#161c16;--surface3:#1c231c;
+  --border:#252e25;--accent:#D2D9B6;--accent-dim:#8a9170;
+  --text:#F2F1EC;--muted:#7a7a7a;--warn:#E08B74;--success:#6db892;
+  --radius:6px;--sidebar:220px;
+  --mono:'IBM Plex Mono','Courier New',monospace;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;line-height:1.5}
+
+/* ── Auth ── */
+#auth{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:200}
+#auth.hidden{display:none}
+.auth-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:32px;width:340px}
+.auth-box h2{font-size:17px;color:var(--accent);margin-bottom:20px}
+.auth-err{color:var(--warn);font-size:12px;margin-top:8px;display:none}
+
+/* ── App shell ── */
+#app{display:grid;grid-template-columns:var(--sidebar) 1fr;height:100vh;overflow:hidden}
+
+/* ── Sidebar ── */
+aside{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+.sidebar-logo{padding:18px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+.logo-mark{width:28px;height:28px;background:var(--accent);border-radius:6px;display:grid;place-items:center}
+.logo-mark svg{width:16px;height:16px}
+.sidebar-logo span{font-size:15px;font-weight:700;color:var(--accent);letter-spacing:.02em}
+nav{flex:1;padding:8px 0}
+.nav-section{font-size:10px;font-weight:600;letter-spacing:.1em;color:var(--muted);padding:14px 16px 4px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px 16px;cursor:pointer;border-radius:0;color:var(--muted);transition:background .12s,color .12s;text-decoration:none;border-left:2px solid transparent}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:var(--surface2);color:var(--accent);border-left-color:var(--accent)}
+.nav-item svg{width:15px;height:15px;flex-shrink:0}
+.nav-item span{font-size:13px}
+.nav-badge{margin-left:auto;background:#2d1f1a;color:var(--warn);font-size:10px;padding:1px 6px;border-radius:10px;font-family:var(--mono)}
+.sidebar-bottom{padding:12px 16px;border-top:1px solid var(--border)}
+.sidebar-bottom button{width:100%;background:transparent;border:1px solid var(--border);color:var(--muted);padding:7px;border-radius:var(--radius);cursor:pointer;font-size:12px;transition:color .12s,border-color .12s}
+.sidebar-bottom button:hover{color:var(--text);border-color:var(--muted)}
+
+/* ── Main ── */
+main{overflow-y:auto;display:flex;flex-direction:column}
+.page{display:none;flex:1;padding:24px}
+.page.active{display:block}
+.page-header{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.page-title{font-size:18px;font-weight:700;color:var(--text)}
+.page-subtitle{font-size:12px;color:var(--muted);margin-top:2px}
+
+/* ── Cards ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px}
+.card+.card{margin-top:12px}
+.card-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+
+/* ── Stats grid ── */
+.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
+.stat-label{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.stat-value{font-size:26px;font-weight:700;color:var(--text);font-family:var(--mono);line-height:1}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:4px}
+.stat-warn .stat-value{color:var(--warn)}
+.stat-ok .stat-value{color:var(--success)}
+
+/* ── Charts grid ── */
+.charts-grid{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:20px}
+.chart-wrap{position:relative;height:220px}
+
+/* ── Period toggle ── */
+.period-toggle{display:flex;gap:4px}
+.period-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px}
+.period-btn.active{background:var(--accent);color:#000;border-color:var(--accent)}
+
+/* ── Tables ── */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--surface2)}
+tr[onclick]:hover td{background:var(--surface3);cursor:pointer}
+.mono{font-family:var(--mono);font-size:12px}
+.ellipsis{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── Status badges ── */
+.badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;font-family:var(--mono);letter-spacing:.02em}
+.badge-matched,.badge-succeeded,.badge-delivered,.badge-active,.badge-online{background:#0d2218;color:var(--success);border:1px solid #1a4a30}
+.badge-pending{background:#1a1a0d;color:#c8c870;border:1px solid #3a3a1a}
+.badge-review,.badge-held{background:#1a120d;color:#c89870;border:1px solid #3a2a1a}
+.badge-rejected,.badge-failed,.badge-expired,.badge-offline,.badge-revoked{background:#1a0d0d;color:var(--warn);border:1px solid #3a1a1a}
+.badge-no_endpoint{background:#1a1a1a;color:var(--muted);border:1px solid var(--border)}
+.badge-open{background:#1a1a0d;color:#c8c870;border:1px solid #3a3a1a}
+.badge-resolved{background:#0d2218;color:var(--success);border:1px solid #1a4a30}
+
+/* ── Device online dot ── */
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+.dot-on{background:var(--success)}
+.dot-off{background:var(--warn)}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius);border:none;cursor:pointer;font-size:12px;font-weight:600;transition:opacity .12s}
+.btn:hover{opacity:.85}
+.btn-primary{background:var(--accent);color:#000}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-warn{background:transparent;border:1px solid var(--warn);color:var(--warn)}
+.btn-sm{padding:4px 10px;font-size:11px}
+.btn-icon{padding:5px;border-radius:4px;background:transparent;border:1px solid var(--border);cursor:pointer;color:var(--muted);display:inline-flex;align-items:center;transition:color .12s,border-color .12s}
+.btn-icon:hover{color:var(--text);border-color:var(--muted)}
+
+/* ── Forms ── */
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:11px;color:var(--muted);font-weight:500}
+input[type=text],input[type=url],input[type=password],select,textarea{
+  background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);
+  color:var(--text);font-size:13px;padding:8px 10px;width:100%;outline:none;
+  transition:border-color .12s;font-family:inherit}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+textarea{resize:vertical;min-height:80px;font-family:var(--mono);font-size:12px}
+select option{background:var(--surface2)}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+
+/* ── Modal ── */
+#modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:none;align-items:flex-start;justify-content:center;padding-top:60px;overflow-y:auto}
+#modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:10px;width:100%;max-width:600px;padding:24px;margin-bottom:40px}
+.modal.wide{max-width:720px}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.modal-title{font-size:15px;font-weight:700}
+.modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;line-height:1;padding:2px 6px}
+.modal-close:hover{color:var(--text)}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+
+/* ── Pairing code ── */
+.pairing-code{font-family:var(--mono);font-size:40px;font-weight:700;letter-spacing:.25em;color:var(--accent);text-align:center;padding:24px;background:#060f06;border:1px dashed #2a4a2a;border-radius:8px;margin:12px 0}
+.pairing-exp{font-size:11px;color:var(--muted);text-align:center}
+
+/* ── Toolbar ── */
+.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.filter-select{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:12px;padding:6px 10px;cursor:pointer;outline:none}
+.filter-select:focus{border-color:var(--accent)}
+.toolbar-spacer{flex:1}
+
+/* ── Pagination ── */
+.pagination{display:flex;align-items:center;gap:8px;margin-top:14px;justify-content:flex-end}
+.pagination span{font-size:12px;color:var(--muted)}
+
+/* ── Operator chips ── */
+.op-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:4px;font-size:11px;border:1px solid var(--border)}
+.op-dot{width:7px;height:7px;border-radius:50%}
+
+/* ── Merge form rows ── */
+.form-row{display:flex;align-items:flex-end;gap:8px}
+.form-row .field{flex:1}
+
+/* ── Toast ── */
+#toast{position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;padding:11px 16px;opacity:0;transform:translateY(6px);transition:opacity .18s,transform .18s;pointer-events:none;z-index:300;max-width:300px}
+#toast.show{opacity:1;transform:translateY(0)}
+#toast.err{border-color:var(--warn);color:var(--warn)}
+
+/* ── Spinner ── */
+.spin{display:inline-block;width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .5s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Empty state ── */
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty svg{width:36px;height:36px;margin-bottom:10px;opacity:.3}
+
+.hidden{display:none!important}
+.mt12{margin-top:12px}
+.mt16{margin-top:16px}
+.flex{display:flex;align-items:center;gap:8px}
+.text-muted{color:var(--muted)}
+.text-warn{color:var(--warn)}
+.text-success{color:var(--success)}
+.text-accent{color:var(--accent)}
+hr.sep{border:none;border-top:1px solid var(--border);margin:16px 0}
+</style>
+</head>
+<body>
+
+<!-- Auth -->
+<div id="auth">
+  <div class="auth-box">
+    <h2>Relio · Back-office</h2>
+    <div class="field">
+      <label>Token administrateur</label>
+      <input type="password" id="authToken" placeholder="ADMIN_TOKEN" autocomplete="off">
+    </div>
+    <div class="auth-err" id="authErr">Token invalide</div>
+    <div style="margin-top:14px"><button class="btn btn-primary" onclick="login()" style="width:100%">Connexion</button></div>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <aside>
+    <div class="sidebar-logo">
+      <div class="logo-mark"><svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" fill="#000"/><rect x="9" y="2" width="5" height="5" rx="1" fill="#000"/><rect x="2" y="9" width="5" height="5" rx="1" fill="#000"/><rect x="9" y="9" width="5" height="5" rx="1" fill="#000"/></svg></div>
+      <span>Relio</span>
+    </div>
+    <nav>
+      <a class="nav-item" data-page="dashboard" onclick="nav('dashboard')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z" opacity=".8"/></svg>
+        <span>Dashboard</span>
+      </a>
+      <div class="nav-section">Gestion</div>
+      <a class="nav-item" data-page="merchants" onclick="nav('merchants')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+        <span>Marchands</span>
+      </a>
+      <a class="nav-item" data-page="devices" onclick="nav('devices')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
+        <span>Téléphones</span>
+      </a>
+      <a class="nav-item" data-page="operators" onclick="nav('operators')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <span>Opérateurs</span>
+      </a>
+      <div class="nav-section">Transactions</div>
+      <a class="nav-item" data-page="sms" onclick="nav('sms')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+        <span>SMS reçus</span>
+      </a>
+      <a class="nav-item" data-page="intents" onclick="nav('intents')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
+        <span>Paiements</span>
+      </a>
+      <div class="nav-section">Opérations</div>
+      <a class="nav-item" data-page="webhooks" onclick="nav('webhooks')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
+        <span>Webhooks</span>
+        <span class="nav-badge" id="badgeWebhooks" style="display:none">0</span>
+      </a>
+      <a class="nav-item" data-page="reviews" onclick="nav('reviews')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+        <span>Vérifications</span>
+        <span class="nav-badge" id="badgeReviews" style="display:none">0</span>
+      </a>
+      <div class="nav-section">Config</div>
+      <a class="nav-item" data-page="templates" onclick="nav('templates')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>
+        <span>Templates SMS</span>
+      </a>
+    </nav>
+    <div class="sidebar-bottom"><button onclick="logout()">Déconnexion</button></div>
+  </aside>
+
+  <main>
+    <!-- Dashboard -->
+    <div class="page" id="page-dashboard">
+      <div class="page-header">
+        <div><div class="page-title">Dashboard</div><div class="page-subtitle">Vue d'ensemble de la plateforme</div></div>
+        <div style="margin-left:auto"><button class="btn btn-ghost btn-sm" onclick="loadDashboard()">↻ Actualiser</button></div>
+      </div>
+      <div class="stats-grid" id="statsGrid"></div>
+      <div class="charts-grid">
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div class="card-label">Transactions</div>
+            <div class="period-toggle">
+              <button class="period-btn active" onclick="setPeriod(7,this)">7j</button>
+              <button class="period-btn" onclick="setPeriod(30,this)">30j</button>
+            </div>
+          </div>
+          <div class="chart-wrap"><canvas id="chartLine"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-label" style="margin-bottom:14px">Par opérateur</div>
+          <div class="chart-wrap"><canvas id="chartDonut"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-label">SMS récents</div>
+        <div id="recentSms"></div>
+      </div>
+    </div>
+
+    <!-- Marchands -->
+    <div class="page" id="page-merchants">
+      <div class="page-header">
+        <div><div class="page-title">Marchands</div><div class="page-subtitle">Cliquez sur une ligne pour voir les détails</div></div>
+        <button class="btn btn-primary" onclick="openModal('create-merchant')" style="margin-left:auto">+ Créer</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table id="merchantsTable">
+            <thead><tr><th>Nom</th><th>Téléphone</th><th>Opérateurs</th><th>Appareils</th><th>Webhook succès</th><th>Créé le</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Téléphones -->
+    <div class="page" id="page-devices">
+      <div class="page-header"><div class="page-title">Téléphones</div><button class="btn btn-ghost btn-sm" onclick="loadDevices()" style="margin-left:auto">↻</button></div>
+      <div class="card"><div class="table-wrap"><table id="devicesTable"><thead><tr><th>Statut</th><th>Nom</th><th>Marchand</th><th>Dernière activité</th><th>Batterie</th><th>App</th><th>SIMs</th><th></th></tr></thead><tbody></tbody></table></div></div>
+    </div>
+
+    <!-- Opérateurs -->
+    <div class="page" id="page-operators">
+      <div class="page-header">
+        <div><div class="page-title">Opérateurs</div><div class="page-subtitle">Mobile Money configurés sur la plateforme</div></div>
+        <button class="btn btn-primary" onclick="openModal('create-operator')" style="margin-left:auto">+ Créer</button>
+      </div>
+      <div id="operatorsContent"></div>
+    </div>
+
+    <!-- SMS -->
+    <div class="page" id="page-sms">
+      <div class="page-header">
+        <div class="page-title">SMS reçus</div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+          <select class="filter-select" id="smsStatus" onchange="loadSms(0)"><option value="">Tous statuts</option><option>matched</option><option>review</option><option>held</option><option>rejected</option></select>
+          <select class="filter-select" id="smsMerchant" onchange="loadSms(0)"><option value="">Tous marchands</option></select>
+          <button class="btn btn-ghost btn-sm" onclick="loadSms(0)">↻</button>
+        </div>
+      </div>
+      <div class="card"><div class="table-wrap"><table id="smsTable"><thead><tr><th>Date</th><th>Expéditeur</th><th>Marchand</th><th>Opérateur</th><th>Montant</th><th>Statut</th><th>Détail</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="pagination"><span id="smsPagInfo"></span><button class="btn btn-ghost btn-sm" id="smsPrev" onclick="smsPage(-1)">←</button><button class="btn btn-ghost btn-sm" id="smsNext" onclick="smsPage(1)">→</button></div>
+    </div>
+
+    <!-- Paiements -->
+    <div class="page" id="page-intents">
+      <div class="page-header">
+        <div class="page-title">Paiements</div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+          <select class="filter-select" id="intentStatus" onchange="loadIntents(0)"><option value="">Tous statuts</option><option>pending</option><option>succeeded</option><option>failed</option><option>expired</option><option>canceled</option></select>
+          <select class="filter-select" id="intentMerchant" onchange="loadIntents(0)"><option value="">Tous marchands</option></select>
+          <button class="btn btn-ghost btn-sm" onclick="loadIntents(0)">↻</button>
+        </div>
+      </div>
+      <div class="card"><div class="table-wrap"><table id="intentsTable"><thead><tr><th>Date</th><th>Référence</th><th>Marchand</th><th>Payeur</th><th>Montant</th><th>Opérateur</th><th>Statut</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="pagination"><span id="intentPagInfo"></span><button class="btn btn-ghost btn-sm" id="intentPrev" onclick="intentPage(-1)">←</button><button class="btn btn-ghost btn-sm" id="intentNext" onclick="intentPage(1)">→</button></div>
+    </div>
+
+    <!-- Webhooks -->
+    <div class="page" id="page-webhooks">
+      <div class="page-header">
+        <div class="page-title">Webhooks</div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+          <select class="filter-select" id="whStatus" onchange="loadWebhooks(0)"><option value="">Tous statuts</option><option>pending</option><option>delivered</option><option>failed</option><option>no_endpoint</option></select>
+          <button class="btn btn-ghost btn-sm" onclick="loadWebhooks(0)">↻</button>
+        </div>
+      </div>
+      <div class="card"><div class="table-wrap"><table id="webhooksTable"><thead><tr><th>Date</th><th>Marchand</th><th>Type</th><th>Statut</th><th>Tentatives</th><th>Erreur</th><th></th></tr></thead><tbody></tbody></table></div></div>
+      <div class="pagination"><span id="whPagInfo"></span><button class="btn btn-ghost btn-sm" id="whPrev" onclick="whPage(-1)">←</button><button class="btn btn-ghost btn-sm" id="whNext" onclick="whPage(1)">→</button></div>
+    </div>
+
+    <!-- Vérifications -->
+    <div class="page" id="page-reviews">
+      <div class="page-header"><div class="page-title">Vérifications manuelles</div></div>
+      <div class="toolbar">
+        <select class="filter-select" id="reviewStatus" onchange="loadReviews()"><option value="open">Ouvertes</option><option value="resolved">Résolues</option></select>
+        <div class="toolbar-spacer"></div>
+        <button class="btn btn-ghost btn-sm" onclick="loadReviews()">↻</button>
+      </div>
+      <div class="card"><div class="table-wrap"><table id="reviewsTable"><thead><tr><th>Date</th><th>Marchand</th><th>Motif</th><th>Statut</th><th></th></tr></thead><tbody></tbody></table></div></div>
+    </div>
+
+    <!-- Templates SMS -->
+    <div class="page" id="page-templates">
+      <div class="page-header">
+        <div><div class="page-title">Templates SMS</div><div class="page-subtitle">Modèles de reconnaissance des SMS Mobile Money</div></div>
+        <button class="btn btn-primary" onclick="openModal('create-template')" style="margin-left:auto">+ Créer</button>
+      </div>
+      <div id="templatesContent"></div>
+      <div class="card mt12">
+        <div class="card-label">Tester un SMS</div>
+        <div class="grid-2 mt12">
+          <div class="field"><label>Expéditeur</label><input type="text" id="testSender" placeholder="22370000001"></div>
+          <div class="field"><label>Corps du SMS</label><input type="text" id="testBody" placeholder="Vous avez reçu 5000 FCFA…"></div>
+        </div>
+        <div style="margin-top:10px"><button class="btn btn-ghost" onclick="testTemplate()">Tester</button></div>
+        <pre id="testResult" class="hidden" style="margin-top:12px;background:var(--surface2);padding:12px;border-radius:var(--radius);font-size:11px;overflow-x:auto;color:var(--accent)"></pre>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal overlay -->
+<div id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title"></span>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── State ──────────────────────────────────────────────────────────────────
+let token = sessionStorage.getItem('rl_token') || '';
+let chartLine = null, chartDonut = null;
+let smsOffset = 0, intentOffset = 0, whOffset = 0;
+const PAGE_SIZE = 50;
+let allMerchants = [], allOperators = [];
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+function login() {
+  const t = document.getElementById('authToken').value.trim();
+  if (!t) return;
+  token = t;
+  api('GET', '/admin/stats').then(() => {
+    sessionStorage.setItem('rl_token', token);
+    document.getElementById('auth').classList.add('hidden');
+    loadGlobals().then(() => nav('dashboard'));
+  }).catch(() => {
+    document.getElementById('authErr').style.display = 'block';
+    token = '';
+  });
+}
+function logout() { token = ''; sessionStorage.removeItem('rl_token'); location.reload(); }
+document.getElementById('authToken').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+// ─── API ─────────────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: { Authorization: `Bearer ${token}` } };
+  if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const res = await fetch(path, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+  return data;
+}
+
+// ─── Toast ───────────────────────────────────────────────────────────────────
+let _tt;
+function toast(msg, err = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'show' + (err ? ' err' : '');
+  clearTimeout(_tt); _tt = setTimeout(() => el.className = '', 3000);
+}
+
+// ─── Navigation ──────────────────────────────────────────────────────────────
+function nav(page) {
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.page === page));
+  document.querySelectorAll('.page').forEach(el => el.classList.toggle('active', el.id === 'page-' + page));
+  if (page === 'dashboard') loadDashboard();
+  else if (page === 'merchants') loadMerchants();
+  else if (page === 'devices') loadDevices();
+  else if (page === 'operators') loadOperators();
+  else if (page === 'sms') { populateMerchantFilter('smsMerchant'); loadSms(0); }
+  else if (page === 'intents') { populateMerchantFilter('intentMerchant'); loadIntents(0); }
+  else if (page === 'webhooks') loadWebhooks(0);
+  else if (page === 'reviews') loadReviews();
+  else if (page === 'templates') loadTemplates();
+}
+
+async function loadGlobals() {
+  [allMerchants, allOperators] = await Promise.all([
+    api('GET', '/admin/merchants').then(d => d.data),
+    api('GET', '/admin/operators').then(d => d.data),
+  ]);
+}
+
+function populateMerchantFilter(selectId) {
+  const sel = document.getElementById(selectId);
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Tous les marchands</option>';
+  allMerchants.forEach(m => sel.insertAdjacentHTML('beforeend', `<option value="${m.id}"${m.id===cur?' selected':''}>${esc(m.name)}</option>`));
+}
+
+// ─── Dashboard ───────────────────────────────────────────────────────────────
+let chartPeriod = 7;
+async function loadDashboard() {
+  const [stats, chart] = await Promise.all([
+    api('GET', '/admin/stats'),
+    api('GET', `/admin/stats/chart?days=${chartPeriod}`),
+  ]).catch(e => { toast(e.message, true); return [{}, {}]; });
+
+  // Badges
+  if (stats.webhooks?.failed > 0) { document.getElementById('badgeWebhooks').textContent = stats.webhooks.failed; document.getElementById('badgeWebhooks').style.display = ''; }
+  if (stats.reviews > 0) { document.getElementById('badgeReviews').textContent = stats.reviews; document.getElementById('badgeReviews').style.display = ''; }
+
+  // Stats cards
+  document.getElementById('statsGrid').innerHTML = [
+    ['Marchands', stats.merchants ?? '—', '', ''],
+    ['Téléphones en ligne', `${stats.devices?.online ?? 0}`, `/ ${stats.devices?.total ?? 0} total`, ''],
+    ['SMS aujourd\'hui', stats.today?.sms ?? 0, `${stats.today?.matched ?? 0} matchés`, ''],
+    ['Taux de succès', `${stats.today?.success_rate ?? 0}%`, 'du jour', stats.today?.success_rate >= 80 ? 'stat-ok' : (stats.today?.success_rate > 0 ? '' : '')],
+    ['Webhooks échoués', stats.webhooks?.failed ?? 0, `${stats.webhooks?.pending ?? 0} en attente`, stats.webhooks?.failed > 0 ? 'stat-warn' : ''],
+  ].map(([label, value, sub, cls]) => `
+    <div class="stat-card ${cls}">
+      <div class="stat-label">${label}</div>
+      <div class="stat-value">${value}</div>
+      ${sub ? `<div class="stat-sub">${sub}</div>` : ''}
+    </div>
+  `).join('');
+
+  // Line chart
+  const labels = chart.daily?.map(d => d.date.slice(5)) ?? [];
+  const totals = chart.daily?.map(d => d.total) ?? [];
+  const matched = chart.daily?.map(d => d.matched) ?? [];
+  if (chartLine) chartLine.destroy();
+  chartLine = new Chart(document.getElementById('chartLine'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'SMS reçus', data: totals, borderColor: '#D2D9B6', backgroundColor: 'rgba(210,217,182,.08)', tension: .3, fill: true, pointRadius: 3 },
+        { label: 'Matchés', data: matched, borderColor: '#6db892', backgroundColor: 'rgba(109,184,146,.08)', tension: .3, fill: true, pointRadius: 3 },
+      ],
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#9c9c9c', font: { size: 11 } } } }, scales: { x: { ticks: { color: '#7a7a7a', font: { size: 10 } }, grid: { color: '#1c231c' } }, y: { ticks: { color: '#7a7a7a', font: { size: 10 } }, grid: { color: '#1c231c' }, beginAtZero: true } } },
+  });
+
+  // Donut chart
+  const ops = chart.by_operator ?? [];
+  if (chartDonut) chartDonut.destroy();
+  const COLORS = ['#D2D9B6','#6db892','#E08B74','#74B8E0','#B874E0','#E0C874'];
+  chartDonut = new Chart(document.getElementById('chartDonut'), {
+    type: 'doughnut',
+    data: {
+      labels: ops.length ? ops.map(o => o.operator || 'Inconnu') : ['Aucune donnée'],
+      datasets: [{ data: ops.length ? ops.map(o => o.c) : [1], backgroundColor: ops.length ? COLORS.slice(0, ops.length) : ['#252e25'], borderWidth: 0 }],
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#9c9c9c', font: { size: 11 }, padding: 10 } } }, cutout: '65%' },
+  });
+
+  // Recent SMS
+  const recent = await api('GET', '/admin/sms?limit=5').catch(() => ({ data: [] }));
+  document.getElementById('recentSms').innerHTML = recent.data.length ? `
+    <table style="width:100%"><thead><tr><th>Date</th><th>Expéditeur</th><th>Marchand</th><th>Montant</th><th>Statut</th></tr></thead>
+    <tbody>${recent.data.map(s => `<tr>
+      <td class="mono text-muted">${fmtDate(s.created_at)}</td>
+      <td class="mono">${esc(s.sender)}</td>
+      <td>${esc(s.merchant_name || '—')}</td>
+      <td class="mono">${s.amount ? fmtAmount(s.amount) : '—'}</td>
+      <td>${badge(s.status)}</td>
+    </tr>`).join('')}</tbody></table>` : '<div class="empty">Aucun SMS</div>';
+}
+
+function setPeriod(days, btn) {
+  chartPeriod = days;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.toggle('active', b === btn));
+  loadDashboard();
+}
+
+// ─── Marchands ───────────────────────────────────────────────────────────────
+async function loadMerchants() {
+  const data = await api('GET', '/admin/merchants').catch(e => { toast(e.message, true); return { data: [] }; });
+  allMerchants = data.data;
+  const tbody = document.querySelector('#merchantsTable tbody');
+  if (!data.data.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">Aucun marchand. Créez-en un pour commencer.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.data.map(m => {
+    const online = (m.devices || []).filter(d => d.online).length;
+    const total = (m.devices || []).length;
+    const opsHtml = (m.operators || []).map(op =>
+      `<span class="op-chip"><span class="op-dot" style="background:${esc(op.color)}"></span>${esc(op.name)}</span>`
+    ).join(' ') || '<span class="text-muted" style="font-size:11px">—</span>';
+    const devBadge = total === 0
+      ? '<span class="text-muted" style="font-size:11px">—</span>'
+      : `<span class="badge ${online>0?'badge-online':'badge-offline'}">${online}/${total}</span>`;
+    const webhookHost = m.webhook_success ? (() => { try { return new URL(m.webhook_success).hostname; } catch { return m.webhook_success.slice(0,28); } })() : '—';
+    return `<tr>
+      <td style="cursor:pointer" onclick="openMerchantDetail('${m.id}')"><span style="font-weight:600">${esc(m.name)}</span></td>
+      <td class="mono text-muted" style="font-size:11px">${esc(m.phone || '—')}</td>
+      <td>${opsHtml}</td>
+      <td>${devBadge}</td>
+      <td class="text-muted" style="font-size:11px">${esc(webhookHost)}</td>
+      <td class="mono text-muted" style="font-size:11px">${fmtDate(m.created_at)}</td>
+      <td><button class="btn btn-warn btn-sm" onclick="deleteMerchant('${m.id}')">Supprimer</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function openMerchantDetail(id) {
+  const m = allMerchants.find(x => x.id === id);
+  if (!m) return;
+  const online = (m.devices || []).filter(d => d.online).length;
+  const total = (m.devices || []).length;
+
+  const opsHtml = (m.operators || []).map(op =>
+    `<span class="op-chip"><span class="op-dot" style="background:${esc(op.color)}"></span>${esc(op.name)}${op.recipient_name && op.recipient_name !== op.name ? ` <span class="text-muted">→</span> <b>${esc(op.recipient_name)}</b>` : ''}</span>`
+  ).join(' ') || '<span class="text-muted" style="font-size:12px">Aucun opérateur configuré (fallback global)</span>';
+
+  const devsHtml = m.devices && m.devices.length
+    ? m.devices.map(d => `
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+          <span class="dot ${d.online?'dot-on':'dot-off'}"></span>
+          <span style="flex:1;font-size:13px">${esc(d.name)}${d.kind === 'smsgate' ? ' <span class="text-muted" style="font-size:11px">· SMS Gateway</span>' : ''}</span>
+          <span class="text-muted" style="font-size:11px">${d.last_seen_at ? relTime(d.last_seen_at) : 'jamais'}</span>
+          <button class="btn btn-warn btn-sm" onclick="revokeDeviceFromModal('${d.id}','${m.id}',this)">Révoquer</button>
+        </div>`).join('')
+    : '<div class="text-muted" style="font-size:12px;padding:8px 0">Aucun téléphone associé.</div>';
+
+  const body = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="card-label" style="margin:0">Identifiants</div>
+      <button class="btn btn-ghost btn-sm" onclick="showCredentials('${m.id}',this)">Voir les secrets</button>
+    </div>
+    ${m.phone ? `<div style="display:flex;align-items:center;gap:8px;padding:6px 0"><span class="text-muted" style="font-size:11px;width:76px;flex-shrink:0">Téléphone</span><span class="mono">${esc(m.phone)}</span></div>` : ''}
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0">
+      <span class="text-muted" style="font-size:11px;width:76px;flex-shrink:0">API Key</span>
+      <span class="mono text-accent" style="flex:1;font-size:12px;word-break:break-all">${esc(m.api_key)}</span>
+      <button class="btn-icon" onclick="copyText('${esc(m.api_key)}')" title="Copier">${iconCopy()}</button>
+    </div>
+    <div id="secrets_${m.id}"></div>
+
+    <hr class="sep">
+    <div class="card-label">Webhooks de paiement</div>
+    <div class="grid-2" style="margin-top:10px;margin-bottom:10px">
+      <div class="field"><label>URL succès</label><input type="url" id="mdws_${m.id}" value="${esc(m.webhook_success||'')}"></div>
+      <div class="field"><label>URL échec</label><input type="url" id="mdwf_${m.id}" value="${esc(m.webhook_failure||'')}"></div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="saveMerchantWebhooks('${m.id}','mdws_','mdwf_')">Enregistrer</button>
+
+    <hr class="sep">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="card-label" style="margin:0">Opérateurs autorisés</div>
+      <button class="btn btn-ghost btn-sm" onclick="openOperatorConfig('${m.id}')">Configurer</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">${opsHtml}</div>
+
+    <hr class="sep">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="card-label" style="margin:0">Code d'appairage</div>
+      <button class="btn btn-ghost btn-sm" id="pairBtn_${m.id}" onclick="genCodeModal('${m.id}',this)">Générer</button>
+    </div>
+    <div id="pairResult_${m.id}"></div>
+
+    <hr class="sep">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="card-label" style="margin:0">SMS Gateway for Android</div>
+      <button class="btn btn-ghost btn-sm" onclick="connectSmsGate('${m.id}',this)">Connecter un téléphone</button>
+    </div>
+    <div id="smsgateResult_${m.id}" class="text-muted" style="font-size:12px">Pour un téléphone qui utilise l'appli SMS Gateway au lieu de l'appli maison.</div>
+
+    <hr class="sep">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="card-label" style="margin:0">Portefeuilles Mobile Money</div>
+      <button class="btn btn-ghost btn-sm" onclick="openAddWallet('${m.id}')">+ Ajouter</button>
+    </div>
+    <div id="walletsSection_${m.id}"><div class="text-muted" style="font-size:12px">Chargement…</div></div>
+
+    <hr class="sep">
+    <div class="card-label" style="margin-bottom:8px">Téléphones <span class="text-muted" style="font-weight:400">${online}/${total} en ligne</span></div>
+    ${devsHtml}`;
+
+  openModal('merchant-detail', m.name, body, m.id);
+  loadWallets(m.id);
+}
+
+async function genCodeModal(id, btn) {
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const d = await api('POST', `/admin/merchants/${id}/pairing-code`);
+    document.getElementById(`pairResult_${id}`).innerHTML = `
+      <div class="pairing-code">${d.code}</div>
+      <div class="pairing-exp">Expire à ${new Date(d.expires_at).toLocaleTimeString()}</div>`;
+  } catch(e) { toast(e.message, true); }
+  btn.disabled = false; btn.textContent = 'Générer';
+}
+
+async function connectSmsGate(id, btn) {
+  const name = prompt('Nom du téléphone (ex. Tecno du magasin)', 'SMS Gateway');
+  if (name === null) return;
+  btn.disabled = true;
+  try {
+    const d = await api('POST', `/admin/merchants/${id}/smsgate-devices`, { name });
+    document.getElementById(`smsgateResult_${id}`).innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0"><span class="text-muted" style="font-size:11px;width:110px;flex-shrink:0">URL du webhook</span><span class="mono" style="flex:1;font-size:12px;word-break:break-all">${esc(d.webhook_url)}</span><button class="btn-icon" onclick="copyText('${esc(d.webhook_url)}')" title="Copier">${iconCopy()}</button></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0"><span class="text-muted" style="font-size:11px;width:110px;flex-shrink:0">Clé de signature</span><span class="mono" style="flex:1;font-size:12px;word-break:break-all">${esc(d.signing_key)}</span><button class="btn-icon" onclick="copyText('${esc(d.signing_key)}')" title="Copier">${iconCopy()}</button></div>
+      <div style="font-size:12px;margin-top:8px;line-height:1.6">
+        1. Dans l'appli SMS Gateway : Réglages › Webhooks › Signing Key → collez la clé ci-dessus.<br>
+        2. Enregistrez les webhooks <span class="mono">${esc(d.events.join(', '))}</span> vers l'URL ci-dessus (script <span class="mono">npm run register-smsgate</span>).<br>
+        3. Activez le Ping (Réglages › Ping) pour le suivi en ligne / hors ligne.<br>
+        <b>La clé ne sera plus affichée : copiez-la maintenant.</b>
+      </div>`;
+    loadGlobals().then(loadMerchants);
+  } catch(e) { toast(e.message, true); }
+  btn.disabled = false;
+}
+
+async function saveMerchantWebhooks(id, wsPrefix = 'mdws_', wfPrefix = 'mdwf_') {
+  try {
+    await api('PATCH', `/admin/merchants/${id}/webhooks`, {
+      webhook_success: document.getElementById(`${wsPrefix}${id}`)?.value.trim() || null,
+      webhook_failure: document.getElementById(`${wfPrefix}${id}`)?.value.trim() || null,
+    });
+    toast('Webhooks enregistrés');
+    loadGlobals().then(loadMerchants);
+  } catch(e) { toast(e.message, true); }
+}
+
+function openOperatorConfig(merchantId) {
+  const merchant = allMerchants.find(m => m.id === merchantId);
+  const merchantName = merchant ? merchant.name : '';
+  const enabled = new Set((merchant?.operators || []).map(o => o.id));
+  const rows = allOperators.length
+    ? allOperators.map(op => `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+          <input type="checkbox" id="opck_${op.id}" ${enabled.has(op.id) ? 'checked' : ''} style="width:15px;height:15px;cursor:pointer">
+          <span class="op-dot" style="background:${esc(op.color)};width:10px;height:10px;border-radius:50%;flex-shrink:0"></span>
+          <span style="flex:1;font-weight:500">${esc(op.name)}</span>
+          <span class="text-muted" style="font-size:11px">${(op.senders||[]).join(', ') || '—'}</span>
+        </div>`).join('')
+    : '<div class="text-muted" style="padding:12px 0">Aucun opérateur créé. Créez-en d\'abord dans la section Opérateurs.</div>';
+  openModal('custom', `Opérateurs — ${merchantName}`, rows,
+    `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button>
+     <button class="btn btn-primary" onclick="saveOperatorConfig('${merchantId}')">Enregistrer</button>`);
+}
+
+async function saveOperatorConfig(merchantId) {
+  const entries = allOperators
+    .filter(op => document.getElementById(`opck_${op.id}`)?.checked)
+    .map(op => ({ operator_id: op.id }));
+  try {
+    await api('PUT', `/admin/merchants/${merchantId}/operators`, { operators: entries });
+    toast('Opérateurs mis à jour');
+    closeModal();
+    loadGlobals().then(() => { loadMerchants(); openMerchantDetail(merchantId); });
+  } catch(e) { toast(e.message, true); }
+}
+
+async function deleteMerchant(id) {
+  if (!confirm('Supprimer ce marchand et révoquer tous ses téléphones ? Cette action est irréversible.')) return;
+  try {
+    await api('DELETE', `/admin/merchants/${id}`);
+    closeModal();
+    toast('Marchand supprimé');
+    loadGlobals().then(loadMerchants);
+  } catch(e) { toast(e.message, true); }
+}
+
+async function showCredentials(merchantId, btn) {
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const d = await api('GET', `/admin/merchants/${merchantId}/credentials`);
+    document.getElementById(`secrets_${merchantId}`).innerHTML = `
+      <div style="background:#060f06;border:1px dashed #2a4a2a;border-radius:6px;padding:12px;margin-top:8px">
+        <div style="font-size:10px;font-weight:600;color:var(--warn);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px">⚠ Secrets — ne pas partager</div>
+        ${[['API Secret','api_secret'],['Webhook Secret','webhook_secret']].map(([label,key]) => `
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 0">
+          <span class="text-muted" style="font-size:11px;width:116px;flex-shrink:0">${label}</span>
+          <span class="mono text-accent" style="flex:1;font-size:11px;word-break:break-all">${esc(d[key])}</span>
+          <button class="btn-icon" onclick="copyText('${esc(d[key])}')">${iconCopy()}</button>
+        </div>`).join('')}
+      </div>`;
+    btn.textContent = 'Masquer'; btn.disabled = false;
+    btn.onclick = () => { document.getElementById(`secrets_${merchantId}`).innerHTML = ''; btn.textContent = 'Voir les secrets'; btn.onclick = () => showCredentials(merchantId, btn); };
+  } catch(e) { toast(e.message, true); btn.disabled = false; btn.textContent = 'Voir les secrets'; }
+}
+
+// ─── Wallets ─────────────────────────────────────────────────────────────────
+
+const OPERATOR_LABELS = { orange: 'Orange Money', moov: 'Moov Money' };
+
+async function loadWallets(merchantId) {
+  const section = document.getElementById(`walletsSection_${merchantId}`);
+  if (!section) return;
+  try {
+    const { data } = await api('GET', `/admin/merchants/${merchantId}/wallets`);
+    if (!data.length) {
+      section.innerHTML = '<div class="text-muted" style="font-size:12px;padding:4px 0">Aucun portefeuille. Ajoutez-en un pour suivre le solde.</div>';
+      return;
+    }
+    section.innerHTML = data.map(w => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)" id="walletRow_${w.id}">
+        <span class="op-dot" style="background:${w.operator==='orange'?'#FF6B00':'#00B4D8'};width:8px;height:8px;border-radius:50%;flex-shrink:0"></span>
+        <span style="flex:1;font-size:13px;font-weight:500">${esc(OPERATOR_LABELS[w.operator]||w.operator)}</span>
+        <span class="mono text-muted" style="font-size:11px">${esc(w.phone)}</span>
+        <span class="mono" style="font-size:12px;min-width:80px;text-align:right" title="Solde courant">${w.balance !== null ? fmtAmount(w.balance) : '—'}</span>
+        <span class="${w.sync_status==='synced'?'badge-online':'badge-offline'} badge" style="font-size:10px">${w.sync_status==='synced'?'synced':'unsynced'}</span>
+        <span class="mono text-muted" style="font-size:11px;min-width:80px;text-align:right" title="Total encaissé">${fmtAmount(w.total_collected)} encaissés</span>
+        <button class="btn btn-ghost btn-sm" onclick="resyncWallet('${merchantId}','${w.id}',this)">Resync</button>
+        <button class="btn btn-warn btn-sm" onclick="deleteWallet('${merchantId}','${w.id}',this)">×</button>
+      </div>`).join('');
+  } catch(e) { section.innerHTML = `<div class="text-muted" style="font-size:12px">${esc(e.message)}</div>`; }
+}
+
+function openAddWallet(merchantId) {
+  const formId = `addWalletForm_${merchantId}`;
+  if (document.getElementById(formId)) return; // déjà ouvert
+  const section = document.getElementById(`walletsSection_${merchantId}`);
+  if (!section) return;
+  const ops = allOperators.length
+    ? allOperators.map(op => `<option value="${esc(op.id)}">${esc(op.name)}</option>`).join('')
+    : '<option value="orange">Orange Money</option><option value="moov">Moov Money</option>';
+  section.insertAdjacentHTML('beforeend', `
+    <div id="${formId}" style="margin-top:10px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius)">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Opérateur</label>
+          <select id="wOp_${merchantId}" style="width:100%;padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:12px">${ops}</select>
+        </div>
+        <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Numéro SIM</label>
+          <input type="text" id="wPhone_${merchantId}" placeholder="70 00 00 01" style="width:100%;padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:12px">
+        </div>
+      </div>
+      <div style="margin-bottom:10px"><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Solde actuel (FCFA) <span style="opacity:.6">— facultatif</span></label>
+        <input type="number" id="wBalance_${merchantId}" placeholder="ex. 25000" min="0" style="width:100%;padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:12px">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" onclick="submitAddWallet('${merchantId}',this)">Ajouter</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('${formId}').remove()">Annuler</button>
+      </div>
+    </div>
+  `);
+}
+
+async function submitAddWallet(merchantId, btn) {
+  btn.disabled = true; btn.textContent = '…';
+  const operator = document.getElementById(`wOp_${merchantId}`).value;
+  const phone = document.getElementById(`wPhone_${merchantId}`).value.trim();
+  const balVal = document.getElementById(`wBalance_${merchantId}`).value;
+  const body = { operator, phone };
+  if (balVal !== '') body.balance = parseInt(balVal);
+  try {
+    await api('POST', `/admin/merchants/${merchantId}/wallets`, body);
+    document.getElementById(`addWalletForm_${merchantId}`)?.remove();
+    toast('Portefeuille ajouté');
+    loadWallets(merchantId);
+  } catch(e) { toast(e.message, true); btn.disabled = false; btn.textContent = 'Ajouter'; }
+}
+
+async function resyncWallet(merchantId, walletId, btn) {
+  const val = prompt('Solde actuel du compte Mobile Money (FCFA) :');
+  if (val === null) return;
+  const balance = parseInt(val);
+  if (!Number.isFinite(balance) || balance < 0) { toast('Solde invalide', true); return; }
+  btn.disabled = true;
+  try {
+    await api('POST', `/admin/merchants/${merchantId}/wallets/${walletId}/resync`, { balance });
+    toast('Solde mis à jour');
+    loadWallets(merchantId);
+  } catch(e) { toast(e.message, true); }
+  btn.disabled = false;
+}
+
+async function deleteWallet(merchantId, walletId, btn) {
+  if (!confirm('Supprimer ce portefeuille ? L\'historique des paiements est conservé.')) return;
+  btn.disabled = true;
+  try {
+    await api('DELETE', `/admin/merchants/${merchantId}/wallets/${walletId}`);
+    toast('Portefeuille supprimé');
+    loadWallets(merchantId);
+  } catch(e) { toast(e.message, true); btn.disabled = false; }
+}
+
+async function revokeDeviceFromModal(deviceId, merchantId, btn) {
+  if (!confirm('Révoquer ce téléphone ?')) return;
+  btn.disabled = true;
+  try {
+    await api('POST', `/admin/devices/${deviceId}/revoke`);
+    toast('Téléphone révoqué');
+    await loadGlobals();
+    openMerchantDetail(merchantId);
+  } catch(e) { toast(e.message, true); btn.disabled = false; }
+}
+
+// ─── Devices ─────────────────────────────────────────────────────────────────
+async function loadDevices() {
+  const data = await api('GET', '/admin/devices').catch(e => { toast(e.message, true); return { data: [] }; });
+  const tbody = document.querySelector('#devicesTable tbody');
+  if (!data.data.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty">Aucun téléphone.</td></tr>'; return; }
+  tbody.innerHTML = data.data.map(d => {
+    const hb = d.last_heartbeat || {};
+    const sims = Array.isArray(hb.sims) ? hb.sims.map(s => esc((s && (s.carrier_name || s.phone_number || s.operator || s.phone)) || '?')).join(', ') : '—';
+    return `<tr>
+      <td><span class="dot ${d.online?'dot-on':'dot-off'}"></span>${d.online?'<span class="text-success">En ligne</span>':'<span class="text-muted">Hors ligne</span>'}</td>
+      <td>${esc(d.name)}</td>
+      <td class="text-muted">${esc(d.merchant_name||'—')}</td>
+      <td class="mono text-muted">${d.last_seen_at ? relTime(d.last_seen_at) : 'jamais'}</td>
+      <td class="mono">${Number.isFinite(hb.battery) ? hb.battery + '%' : '—'}</td>
+      <td class="mono text-muted">${d.kind === 'smsgate' ? 'SMS Gateway' : esc(hb.app_version || '—')}</td>
+      <td class="text-muted">${sims}</td>
+      <td><button class="btn btn-warn btn-sm" onclick="revokeDevice('${d.id}',this)">Révoquer</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function revokeDevice(id, btn) {
+  if (!confirm('Révoquer ce téléphone ?')) return;
+  btn.disabled = true;
+  try { await api('POST', `/admin/devices/${id}/revoke`); toast('Révoqué'); loadDevices(); }
+  catch(e) { toast(e.message, true); btn.disabled = false; }
+}
+
+// ─── Opérateurs ──────────────────────────────────────────────────────────────
+async function loadOperators() {
+  const data = await api('GET', '/admin/operators').catch(e => { toast(e.message, true); return { data: [] }; });
+  allOperators = data.data;
+  const el = document.getElementById('operatorsContent');
+  if (!data.data.length) { el.innerHTML = '<div class="empty">Aucun opérateur. Créez-en un pour commencer.</div>'; return; }
+  el.innerHTML = data.data.map(op => `
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="op-dot" style="background:${esc(op.color)};width:12px;height:12px;border-radius:50%;flex-shrink:0"></span>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:14px">${esc(op.name)} <span class="text-muted" style="font-size:11px">${esc(op.country)}</span></div>
+          <div class="mono text-muted" style="font-size:11px;margin-top:2px">${esc((op.senders||[]).join(' · ')) || 'Aucun expéditeur'}</div>
+        </div>
+        <span class="badge ${op.active?'badge-active':'badge-revoked'}">${op.active?'Actif':'Inactif'}</span>
+        <span class="text-muted" style="font-size:11px">${op.template_count} template(s)</span>
+        <button class="btn btn-ghost btn-sm" onclick="openModal('edit-operator','${op.id}')">Modifier</button>
+      </div>
+    </div>`).join('');
+}
+
+// ─── SMS ─────────────────────────────────────────────────────────────────────
+async function loadSms(offset) {
+  smsOffset = offset;
+  const status = document.getElementById('smsStatus').value;
+  const merchant = document.getElementById('smsMerchant').value;
+  let q = `/admin/sms?limit=${PAGE_SIZE}&offset=${offset}`;
+  if (status) q += `&status=${status}`;
+  if (merchant) q += `&merchant_id=${merchant}`;
+  const data = await api('GET', q).catch(e => { toast(e.message, true); return { data: [], total: 0 }; });
+  const tbody = document.querySelector('#smsTable tbody');
+  tbody.innerHTML = data.data.map(s => `<tr>
+    <td class="mono text-muted">${fmtDate(s.created_at)}</td>
+    <td class="mono">${esc(s.sender)}</td>
+    <td>${esc(s.merchant_name||'—')}</td>
+    <td>${s.operator ? `<span class="badge" style="background:#1a1a2e;color:#74B8E0;border-color:#2a2a4e">${esc(s.operator)}</span>` : '—'}</td>
+    <td class="mono">${s.amount ? fmtAmount(s.amount) : '—'}</td>
+    <td>${badge(s.status)}</td>
+    <td class="text-muted ellipsis" style="font-size:11px">${esc(s.body||'').slice(0,60)}</td>
+  </tr>`).join('') || '<tr><td colspan="7" class="empty">Aucun SMS.</td></tr>';
+  const pages = Math.ceil(data.total / PAGE_SIZE);
+  const cur = Math.floor(offset / PAGE_SIZE) + 1;
+  document.getElementById('smsPagInfo').textContent = `${cur}/${Math.max(pages,1)} — ${data.total} total`;
+  document.getElementById('smsPrev').disabled = offset === 0;
+  document.getElementById('smsNext').disabled = offset + PAGE_SIZE >= data.total;
+}
+function smsPage(dir) { loadSms(smsOffset + dir * PAGE_SIZE); }
+
+// ─── Intents ─────────────────────────────────────────────────────────────────
+async function loadIntents(offset) {
+  intentOffset = offset;
+  const status = document.getElementById('intentStatus').value;
+  const merchant = document.getElementById('intentMerchant').value;
+  let q = `/admin/intents?limit=${PAGE_SIZE}&offset=${offset}`;
+  if (status) q += `&status=${status}`;
+  if (merchant) q += `&merchant_id=${merchant}`;
+  const data = await api('GET', q).catch(e => { toast(e.message, true); return { data: [], total: 0 }; });
+  const tbody = document.querySelector('#intentsTable tbody');
+  tbody.innerHTML = data.data.map(i => `<tr>
+    <td class="mono text-muted">${fmtDate(i.created_at)}</td>
+    <td class="mono">${esc(i.reference)}</td>
+    <td>${esc(i.merchant_name||'—')}</td>
+    <td class="mono">${esc(i.payer_msisdn||'—')}</td>
+    <td class="mono">${fmtAmount(i.amount)}</td>
+    <td>${i.operator ? `<span class="badge" style="background:#1a1a2e;color:#74B8E0;border-color:#2a2a4e">${esc(i.operator)}</span>` : '—'}</td>
+    <td>${badge(i.status)}</td>
+  </tr>`).join('') || '<tr><td colspan="7" class="empty">Aucun paiement.</td></tr>';
+  const pages = Math.ceil(data.total / PAGE_SIZE);
+  const cur = Math.floor(offset / PAGE_SIZE) + 1;
+  document.getElementById('intentPagInfo').textContent = `${cur}/${Math.max(pages,1)} — ${data.total} total`;
+  document.getElementById('intentPrev').disabled = offset === 0;
+  document.getElementById('intentNext').disabled = offset + PAGE_SIZE >= data.total;
+}
+function intentPage(dir) { loadIntents(intentOffset + dir * PAGE_SIZE); }
+
+// ─── Webhooks ────────────────────────────────────────────────────────────────
+async function loadWebhooks(offset) {
+  whOffset = offset;
+  const status = document.getElementById('whStatus').value;
+  let q = `/admin/webhooks?limit=${PAGE_SIZE}&offset=${offset}`;
+  if (status) q += `&status=${status}`;
+  const data = await api('GET', q).catch(e => { toast(e.message, true); return { data: [], total: 0 }; });
+  const tbody = document.querySelector('#webhooksTable tbody');
+  tbody.innerHTML = data.data.map(e => `<tr>
+    <td class="mono text-muted">${fmtDate(e.created_at)}</td>
+    <td>${esc(e.merchant_id?.slice(0,8)||'—')}…</td>
+    <td class="mono" style="font-size:11px">${esc(e.type)}</td>
+    <td>${badge(e.status)}</td>
+    <td class="mono">${e.attempts}</td>
+    <td class="text-muted ellipsis" style="font-size:11px">${esc(e.last_error||'—')}</td>
+    <td>${e.status!=='delivered'?`<button class="btn btn-ghost btn-sm" onclick="retryWebhook('${e.id}',this)">Relancer</button>`:''}
+    </td>
+  </tr>`).join('') || '<tr><td colspan="7" class="empty">Aucun événement.</td></tr>';
+  const pages = Math.ceil(data.total / PAGE_SIZE);
+  const cur = Math.floor(offset / PAGE_SIZE) + 1;
+  document.getElementById('whPagInfo').textContent = `${cur}/${Math.max(pages,1)} — ${data.total} total`;
+  document.getElementById('whPrev').disabled = offset === 0;
+  document.getElementById('whNext').disabled = offset + PAGE_SIZE >= data.total;
+}
+function whPage(dir) { loadWebhooks(whOffset + dir * PAGE_SIZE); }
+
+async function retryWebhook(id, btn) {
+  btn.disabled = true; btn.textContent = '…';
+  try { await api('POST', `/admin/webhooks/${id}/retry`); toast('Webhook relancé'); loadWebhooks(whOffset); }
+  catch(e) { toast(e.message, true); btn.disabled = false; btn.textContent = 'Relancer'; }
+}
+
+// ─── Reviews ─────────────────────────────────────────────────────────────────
+async function loadReviews() {
+  const status = document.getElementById('reviewStatus').value;
+  const data = await api('GET', `/admin/reviews?status=${status}`).catch(e => { toast(e.message, true); return { data: [] }; });
+  const tbody = document.querySelector('#reviewsTable tbody');
+  tbody.innerHTML = data.data.map(r => `<tr>
+    <td class="mono text-muted">${fmtDate(r.created_at)}</td>
+    <td>${esc(r.merchant_id?.slice(0,8)||'—')}…</td>
+    <td class="text-muted" style="font-size:11px">${esc(r.reason||'—')}</td>
+    <td>${badge(r.status)}</td>
+    <td>${r.status==='open'?`<button class="btn btn-ghost btn-sm" onclick="openResolve('${r.id}','${r.candidate_intent_id||''}')">Résoudre</button>`:''}
+    </td>
+  </tr>`).join('') || '<tr><td colspan="5" class="empty">Aucune vérification.</td></tr>';
+}
+
+function openResolve(id, candidateIntentId) {
+  openModal('custom', 'Résoudre la vérification',
+    `<div class="field"><label>Décision</label><select id="resolveRes">
+        <option value="attach">Paiement réel : le rattacher à une commande</option>
+        <option value="unrelated">Paiement réel, sans rapport avec une commande</option>
+        <option value="fraud">Faux SMS / fraude</option>
+      </select></div>
+     <div class="field mt12"><label>Intention de paiement (pour « rattacher »)</label><input type="text" id="resolveIntent" placeholder="pi_…" value="${esc(candidateIntentId||'')}"></div>
+     <div class="field mt12"><label>Note (optionnel)</label><textarea id="resolveNote"></textarea></div>
+     <div class="text-muted mt12" style="font-size:11px">Vérifiez d'abord dans l'historique Orange/Moov que l'argent est bien arrivé.</div>`,
+    `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button>
+     <button class="btn btn-primary" onclick="resolveReview('${id}')">Valider</button>`);
+}
+async function resolveReview(id) {
+  try {
+    const action = document.getElementById('resolveRes').value;
+    const intentId = document.getElementById('resolveIntent').value.trim();
+    if (action === 'attach' && !intentId) { toast('Indiquez l\'intention de paiement à rattacher (pi_…)', true); return; }
+    await api('POST', `/admin/reviews/${id}/resolve`, {
+      action,
+      intent_id: action === 'attach' ? intentId : undefined,
+      note: document.getElementById('resolveNote').value.trim() || undefined,
+    });
+    toast('Résolu'); closeModal(); loadReviews();
+  } catch(e) { toast(e.message, true); }
+}
+
+// ─── Templates ───────────────────────────────────────────────────────────────
+async function loadTemplates() {
+  const data = await api('GET', '/admin/parsers').catch(e => { toast(e.message, true); return { data: [] }; });
+  const el = document.getElementById('templatesContent');
+  el.innerHTML = data.data.map(t => `
+    <div class="card" style="margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="badge ${t.active?'badge-active':'badge-offline'}">${t.active?'Actif':'Inactif'}</span>
+        <span style="flex:1;font-weight:600">${esc(t.operator)} · ${esc(t.kind)}</span>
+        <span class="text-muted mono" style="font-size:11px">prio ${t.priority}</span>
+        <button class="btn btn-ghost btn-sm" onclick="openModal('edit-template','${t.id}')">Modifier</button>
+        <button class="btn btn-warn btn-sm" onclick="deleteTemplate('${t.id}',this)">Supprimer</button>
+      </div>
+      <div class="mono text-muted" style="font-size:11px;margin-top:8px;word-break:break-all">${esc(t.pattern)}</div>
+      <div class="text-muted" style="font-size:11px;margin-top:4px">Expéditeurs : ${esc((t.senders||[]).join(', '))}</div>
+    </div>`).join('') || '<div class="empty">Aucun template.</div>';
+}
+
+async function testTemplate() {
+  const sender = document.getElementById('testSender').value.trim();
+  const body = document.getElementById('testBody').value.trim();
+  if (!sender || !body) { toast('Remplissez les deux champs', true); return; }
+  try {
+    const r = await api('POST', '/admin/parsers/test', { sender, body });
+    const pre = document.getElementById('testResult');
+    pre.textContent = JSON.stringify(r, null, 2);
+    pre.classList.remove('hidden');
+  } catch(e) { toast(e.message, true); }
+}
+
+// ─── Modals ───────────────────────────────────────────────────────────────────
+function openModal(type, arg1, arg2, arg3) {
+  const title = document.getElementById('modal-title');
+  const body = document.getElementById('modal-body');
+  const footer = document.getElementById('modal-footer');
+
+  if (type === 'create-merchant') {
+    title.textContent = 'Créer un marchand';
+    body.innerHTML = `
+      <div class="grid-2">
+        <div class="field"><label>Nom *</label><input type="text" id="mName" placeholder="Orange Shop Ouaga"></div>
+        <div class="field"><label>Téléphone</label><input type="text" id="mPhone" placeholder="22670000000"></div>
+      </div>
+      <div class="field mt12"><label>Webhook générique</label><input type="url" id="mWebhook" placeholder="https://..."></div>`;
+    footer.innerHTML = `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="createMerchant()">Créer</button>`;
+  } else if (type === 'create-operator') {
+    title.textContent = 'Créer un opérateur';
+    body.innerHTML = `
+      <div class="grid-2">
+        <div class="field"><label>Nom *</label><input type="text" id="opName" placeholder="Orange Money BF"></div>
+        <div class="field"><label>Couleur</label><input type="text" id="opColor" value="#E08B74" placeholder="#E08B74"></div>
+      </div>
+      <div class="field mt12"><label>Expéditeurs (un par ligne — nom ou numéro)</label><textarea id="opSenders" placeholder="OrangeMoney&#10;22370000001"></textarea></div>`;
+    footer.innerHTML = `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="createOperator()">Créer</button>`;
+  } else if (type === 'edit-operator') {
+    const op = allOperators.find(o => o.id === arg1);
+    if (!op) return;
+    title.textContent = `Modifier — ${op.name}`;
+    body.innerHTML = `
+      <div class="grid-2">
+        <div class="field"><label>Nom</label><input type="text" id="opName" value="${esc(op.name)}"></div>
+        <div class="field"><label>Couleur</label><input type="text" id="opColor" value="${esc(op.color)}"></div>
+      </div>
+      <div class="field mt12"><label>Expéditeurs (un par ligne — nom ou numéro)</label><textarea id="opSenders">${(op.senders||[]).join('\n')}</textarea></div>
+      <div class="field mt12"><label>Statut</label><select id="opActive"><option value="true" ${op.active?'selected':''}>Actif</option><option value="false" ${!op.active?'selected':''}>Inactif</option></select></div>`;
+    footer.innerHTML = `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="updateOperator('${op.id}')">Enregistrer</button>`;
+  } else if (type === 'create-template') {
+    const opOpts = allOperators.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('');
+    title.textContent = 'Créer un template SMS';
+    body.innerHTML = `
+      <div class="grid-3">
+        <div class="field"><label>Opérateur (label)</label><input type="text" id="tpOp" placeholder="orange_money"></div>
+        <div class="field"><label>Type</label><select id="tpKind"><option value="credit">credit</option><option value="debit">debit</option></select></div>
+        <div class="field"><label>Priorité</label><input type="text" id="tpPrio" value="0"></div>
+      </div>
+      <div class="field mt12"><label>Expéditeurs (virgule)</label><input type="text" id="tpSenders" placeholder="MoovMoney,OrangeMoney"></div>
+      <div class="field mt12"><label>Pattern regex</label><textarea id="tpPattern" placeholder="reçu (?&lt;amount&gt;[\d\s.,]+)\s*FCFA.*"></textarea></div>
+      <div class="field mt12"><label>Exemple SMS</label><textarea id="tpExample"></textarea></div>
+      ${opOpts ? `<div class="field mt12"><label>Lier à un opérateur (optionnel)</label><select id="tpOpId"><option value="">—</option>${opOpts}</select></div>` : ''}`;
+    footer.innerHTML = `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="createTemplate()">Créer</button>`;
+  } else if (type === 'edit-template') {
+    title.textContent = 'Modifier template'; body.innerHTML = '<div class="spin"></div>'; footer.innerHTML = '';
+    api('GET', '/admin/parsers').then(d => {
+      const t = d.data.find(x => x.id === arg1);
+      if (!t) { closeModal(); return; }
+      const opOpts = allOperators.map(o => `<option value="${o.id}" ${t.operator_id===o.id?'selected':''}>${esc(o.name)}</option>`).join('');
+      body.innerHTML = `
+        <div class="grid-3">
+          <div class="field"><label>Opérateur</label><input type="text" id="tpOp" value="${esc(t.operator)}"></div>
+          <div class="field"><label>Type</label><select id="tpKind"><option value="credit" ${t.kind==='credit'?'selected':''}>credit</option><option value="debit" ${t.kind==='debit'?'selected':''}>debit</option></select></div>
+          <div class="field"><label>Priorité</label><input type="text" id="tpPrio" value="${t.priority}"></div>
+        </div>
+        <div class="field mt12"><label>Expéditeurs</label><input type="text" id="tpSenders" value="${esc(t.senders)}"></div>
+        <div class="field mt12"><label>Pattern</label><textarea id="tpPattern">${esc(t.pattern)}</textarea></div>
+        <div class="field mt12"><label>Exemple</label><textarea id="tpExample">${esc(t.example||'')}</textarea></div>
+        <div class="field mt12"><label>Statut</label><select id="tpActive"><option value="1" ${t.active?'selected':''}>Actif</option><option value="0" ${!t.active?'selected':''}>Inactif</option></select></div>
+        ${opOpts ? `<div class="field mt12"><label>Lier à un opérateur</label><select id="tpOpId"><option value="">—</option>${opOpts}</select></div>` : ''}`;
+      footer.innerHTML = `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="saveTemplate('${t.id}')">Enregistrer</button>`;
+    });
+  } else if (type === 'custom') {
+    title.textContent = arg1; body.innerHTML = arg2 || ''; footer.innerHTML = arg3 || '';
+  } else if (type === 'merchant-detail') {
+    title.textContent = arg1; body.innerHTML = arg2 || '';
+    footer.innerHTML = '';
+    document.getElementById('modal-box').classList.add('wide');
+    document.getElementById('modal-overlay').classList.add('open');
+    return;
+  }
+  document.getElementById('modal-box').classList.remove('wide');
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('modal-overlay')) return;
+  document.getElementById('modal-overlay').classList.remove('open');
+  document.getElementById('modal-box').classList.remove('wide');
+}
+
+async function createMerchant() {
+  const name = document.getElementById('mName').value.trim();
+  if (!name) { toast('Nom obligatoire', true); return; }
+  const btn = document.querySelector('#modal-footer .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    await api('POST', '/admin/merchants', {
+      name,
+      phone: document.getElementById('mPhone').value.trim() || undefined,
+      webhook_url: document.getElementById('mWebhook').value.trim() || undefined,
+    });
+    closeModal();
+    toast('Marchand créé');
+    loadGlobals().then(loadMerchants);
+  } catch(e) {
+    toast(e.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Créer'; }
+  }
+}
+
+async function createOperator() {
+  const name = document.getElementById('opName').value.trim();
+  const color = document.getElementById('opColor').value.trim();
+  const senders = document.getElementById('opSenders').value.split('\n').map(s => s.trim()).filter(Boolean);
+  if (!name) { toast('Nom obligatoire', true); return; }
+  try {
+    await api('POST', '/admin/operators', { name, color, senders });
+    toast('Opérateur créé'); closeModal(); loadGlobals().then(loadOperators);
+  } catch(e) { toast(e.message, true); }
+}
+
+async function updateOperator(id) {
+  const senders = document.getElementById('opSenders').value.split('\n').map(s => s.trim()).filter(Boolean);
+  try {
+    await api('PUT', `/admin/operators/${id}`, {
+      name: document.getElementById('opName').value.trim(),
+      color: document.getElementById('opColor').value.trim(),
+      senders,
+      active: document.getElementById('opActive').value === 'true',
+    });
+    toast('Opérateur mis à jour'); closeModal(); loadGlobals().then(loadOperators);
+  } catch(e) { toast(e.message, true); }
+}
+
+function parseSenders(val) {
+  return val.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+async function createTemplate() {
+  const body = {
+    id: `tpl_${Date.now()}`,
+    operator: document.getElementById('tpOp').value.trim(),
+    kind: document.getElementById('tpKind').value,
+    senders: parseSenders(document.getElementById('tpSenders').value),
+    pattern: document.getElementById('tpPattern').value.trim(),
+    example: document.getElementById('tpExample').value.trim() || undefined,
+    priority: parseInt(document.getElementById('tpPrio').value) || 0,
+    active: 1,
+    operator_id: document.getElementById('tpOpId')?.value || undefined,
+  };
+  if (!body.operator || !body.pattern) { toast('Opérateur et pattern obligatoires', true); return; }
+  try { await api('PUT', `/admin/parsers/${body.id}`, body); toast('Template créé'); closeModal(); loadTemplates(); }
+  catch(e) { toast(e.message, true); }
+}
+
+async function saveTemplate(id) {
+  const body = {
+    operator: document.getElementById('tpOp').value.trim(),
+    kind: document.getElementById('tpKind').value,
+    senders: parseSenders(document.getElementById('tpSenders').value),
+    pattern: document.getElementById('tpPattern').value.trim(),
+    example: document.getElementById('tpExample').value.trim() || undefined,
+    priority: parseInt(document.getElementById('tpPrio').value) || 0,
+    active: parseInt(document.getElementById('tpActive').value),
+    operator_id: document.getElementById('tpOpId')?.value || undefined,
+  };
+  try { await api('PUT', `/admin/parsers/${id}`, body); toast('Template mis à jour'); closeModal(); loadTemplates(); }
+  catch(e) { toast(e.message, true); }
+}
+
+async function deleteTemplate(id, btn) {
+  if (!confirm('Supprimer ce template définitivement ?')) return;
+  btn.disabled = true;
+  try { await api('DELETE', `/admin/parsers/${id}`); toast('Template supprimé'); loadTemplates(); }
+  catch(e) { toast(e.message, true); btn.disabled = false; }
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function fmtDate(ms) {
+  if (!ms) return '—';
+  const d = typeof ms === 'string' ? new Date(ms) : new Date(ms);
+  return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}) + ' ' + d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+}
+function fmtAmount(n) { return n != null ? n.toLocaleString('fr-FR') + ' F' : '—'; }
+function relTime(iso) {
+  if (!iso) return 'jamais';
+  const d = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (d < 60) return 'maintenant';
+  if (d < 3600) return `${Math.floor(d/60)}min`;
+  if (d < 86400) return `${Math.floor(d/3600)}h`;
+  return `${Math.floor(d/86400)}j`;
+}
+function badge(status) {
+  const cls = `badge badge-${status}`;
+  return `<span class="${cls}">${status}</span>`;
+}
+function iconCopy() { return `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M16 1H4C2.9 1 2 1.9 2 3v14h2V3h12V1zm3 4H8C6.9 5 6 5.9 6 7v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`; }
+function copyText(text) { navigator.clipboard.writeText(text).then(() => toast('Copié')); }
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+if (token) {
+  api('GET', '/admin/stats').then(() => {
+    document.getElementById('auth').classList.add('hidden');
+    loadGlobals().then(() => nav('dashboard'));
+  }).catch(() => { token = ''; sessionStorage.removeItem('rl_token'); });
+}
+</script>
+</body>
+</html>
