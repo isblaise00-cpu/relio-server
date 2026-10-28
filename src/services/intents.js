@@ -32,6 +32,7 @@ async function serializeIntent(ctx, row, { withInstructions = false } = {}) {
     status: row.status,
     confirmation: row.confirmation,
     transaction_id: row.transaction_id,
+    plan_id: row.plan_id || null,
     metadata: row.metadata ? JSON.parse(row.metadata) : null,
     expires_at: iso(row.expires_at),
     created_at: iso(row.created_at),
@@ -241,6 +242,23 @@ async function succeedIntent(ctx, intent, sms, confirmation, now = Date.now()) {
   return updated;
 }
 
+/**
+ * Crée une intention interne pour un plan de paiement.
+ * Appelée par ingest.js — jamais exposée directement à l'API marchand.
+ */
+async function createPlanIntent(ctx, plan, sms, now = Date.now()) {
+  const id = newId('pi');
+  const reference = `plan:${plan.id}:${sms.id}`;
+  await ctx.db
+    .prepare(
+      `INSERT INTO payment_intents
+         (id, merchant_id, reference, amount, currency, payer_msisdn, operator, status, plan_id, expires_at, created_at)
+       VALUES (?, ?, ?, ?, 'XOF', ?, ?, 'pending', ?, ?, ?)`,
+    )
+    .run(id, plan.merchant_id, reference, plan.amount, sms.payer_msisdn, sms.operator, plan.id, now + 300000, now);
+  return getRow(ctx, id);
+}
+
 /** Tâche de fond : passe en "expired" les intentions dont le délai est dépassé. */
 async function expireDue(ctx, now = Date.now()) {
   const due = await ctx.db
@@ -260,6 +278,7 @@ module.exports = {
   getMerchantIntent,
   findByReference,
   createIntent,
+  createPlanIntent,
   cancelIntent,
   findCandidates,
   succeedIntent,

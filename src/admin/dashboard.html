@@ -565,7 +565,7 @@ async function loadMerchants() {
       : `<span class="badge ${online>0?'badge-online':'badge-offline'}">${online}/${total}</span>`;
     const webhookHost = m.webhook_success ? (() => { try { return new URL(m.webhook_success).hostname; } catch { return m.webhook_success.slice(0,28); } })() : '—';
     return `<tr>
-      <td style="cursor:pointer" onclick="openMerchantDetail('${m.id}')"><span style="font-weight:600">${esc(m.name)}</span></td>
+      <td style="cursor:pointer" onclick="openMerchantDetail('${m.id}')"><span style="font-weight:600">${esc(m.name)}</span> <span class="badge ${m.payment_mode==='plan'?'badge-online':'badge-offline'}" style="font-size:10px;margin-left:4px">${m.payment_mode==='plan'?'plan':'intent'}</span></td>
       <td class="mono text-muted" style="font-size:11px">${esc(m.phone || '—')}</td>
       <td>${opsHtml}</td>
       <td>${devBadge}</td>
@@ -626,17 +626,10 @@ function openMerchantDetail(id) {
 
     <hr class="sep">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div class="card-label" style="margin:0">Code d'appairage</div>
-      <button class="btn btn-ghost btn-sm" id="pairBtn_${m.id}" onclick="genCodeModal('${m.id}',this)">Générer</button>
-    </div>
-    <div id="pairResult_${m.id}"></div>
-
-    <hr class="sep">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div class="card-label" style="margin:0">SMS Gateway for Android</div>
-      <button class="btn btn-ghost btn-sm" onclick="connectSmsGate('${m.id}',this)">Connecter un téléphone</button>
+      <button class="btn btn-ghost btn-sm" onclick="connectSmsGate('${m.id}',this)">+ Connecter un téléphone</button>
     </div>
-    <div id="smsgateResult_${m.id}" class="text-muted" style="font-size:12px">Pour un téléphone qui utilise l'appli SMS Gateway au lieu de l'appli maison.</div>
+    <div id="smsgateResult_${m.id}" class="text-muted" style="font-size:12px">Connectez un téléphone Android avec l'appli <b>SMS Gateway for Android</b> pour recevoir les SMS de paiement.</div>
 
     <hr class="sep">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -645,12 +638,22 @@ function openMerchantDetail(id) {
     </div>
     <div id="walletsSection_${m.id}"><div class="text-muted" style="font-size:12px">Chargement…</div></div>
 
+    ${m.payment_mode === 'plan' ? `
+    <hr class="sep">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="card-label" style="margin:0">Plans de paiement</div>
+      <button class="btn btn-ghost btn-sm" onclick="openAddPlan('${m.id}')">+ Ajouter</button>
+    </div>
+    <div id="plansSection_${m.id}"><div class="text-muted" style="font-size:12px">Chargement…</div></div>
+    ` : ''}
+
     <hr class="sep">
     <div class="card-label" style="margin-bottom:8px">Téléphones <span class="text-muted" style="font-weight:400">${online}/${total} en ligne</span></div>
     ${devsHtml}`;
 
   openModal('merchant-detail', m.name, body, m.id);
   loadWallets(m.id);
+  if (m.payment_mode === 'plan') loadPlans(m.id);
 }
 
 async function genCodeModal(id, btn) {
@@ -671,13 +674,17 @@ async function connectSmsGate(id, btn) {
   try {
     const d = await api('POST', `/admin/merchants/${id}/smsgate-devices`, { name });
     document.getElementById(`smsgateResult_${id}`).innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 0"><span class="text-muted" style="font-size:11px;width:110px;flex-shrink:0">URL du webhook</span><span class="mono" style="flex:1;font-size:12px;word-break:break-all">${esc(d.webhook_url)}</span><button class="btn-icon" onclick="copyText('${esc(d.webhook_url)}')" title="Copier">${iconCopy()}</button></div>
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 0"><span class="text-muted" style="font-size:11px;width:110px;flex-shrink:0">Clé de signature</span><span class="mono" style="flex:1;font-size:12px;word-break:break-all">${esc(d.signing_key)}</span><button class="btn-icon" onclick="copyText('${esc(d.signing_key)}')" title="Copier">${iconCopy()}</button></div>
-      <div style="font-size:12px;margin-top:8px;line-height:1.6">
-        1. Dans l'appli SMS Gateway : Réglages › Webhooks › Signing Key → collez la clé ci-dessus.<br>
-        2. Enregistrez les webhooks <span class="mono">${esc(d.events.join(', '))}</span> vers l'URL ci-dessus (script <span class="mono">npm run register-smsgate</span>).<br>
-        3. Activez le Ping (Réglages › Ping) pour le suivi en ligne / hors ligne.<br>
-        <b>La clé ne sera plus affichée : copiez-la maintenant.</b>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px">
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);margin-bottom:5px">
+          <span class="text-muted" style="font-size:11px;width:120px;flex-shrink:0">URL du webhook</span>
+          <span class="mono" style="flex:1;font-size:11px;word-break:break-all;color:var(--accent)">${esc(d.webhook_url)}</span>
+          <button class="btn-icon" onclick="copyText('${esc(d.webhook_url)}')" title="Copier">${iconCopy()}</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 0">
+          <span class="text-muted" style="font-size:11px;width:120px;flex-shrink:0">Clé de signature</span>
+          <span class="mono" style="flex:1;font-size:11px;word-break:break-all;color:var(--accent)">${esc(d.signing_key)}</span>
+          <button class="btn-icon" onclick="copyText('${esc(d.signing_key)}')" title="Copier">${iconCopy()}</button>
+        </div>
       </div>`;
     loadGlobals().then(loadMerchants);
   } catch(e) { toast(e.message, true); }
@@ -846,6 +853,93 @@ async function deleteWallet(merchantId, walletId, btn) {
     await api('DELETE', `/admin/merchants/${merchantId}/wallets/${walletId}`);
     toast('Portefeuille supprimé');
     loadWallets(merchantId);
+  } catch(e) { toast(e.message, true); btn.disabled = false; }
+}
+
+// ─── Plans de paiement ───────────────────────────────────────────────────────
+
+async function loadPlans(merchantId) {
+  const section = document.getElementById(`plansSection_${merchantId}`);
+  if (!section) return;
+  try {
+    const { data } = await api('GET', `/admin/merchants/${merchantId}/plans`);
+    if (!data.length) {
+      section.innerHTML = '<div class="text-muted" style="font-size:12px;padding:4px 0">Aucun plan. Ajoutez-en un pour commencer à accepter des paiements.</div>';
+      return;
+    }
+    section.innerHTML = data.map(p => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)" id="planRow_${p.id}">
+        <span style="flex:1;font-size:13px;font-weight:500">${esc(p.name)}</span>
+        <span class="mono" style="font-size:12px">${fmtAmount(p.amount)} FCFA</span>
+        ${p.operator ? `<span class="op-dot" style="background:${p.operator==='orange'?'#FF6B00':'#00B4D8'};width:8px;height:8px;border-radius:50%"></span><span class="text-muted" style="font-size:11px">${esc(p.operator_label||p.operator)}</span>` : '<span class="text-muted" style="font-size:11px">tous opérateurs</span>'}
+        <span class="${p.active?'badge-online':'badge-offline'} badge" style="font-size:10px">${p.active?'actif':'inactif'}</span>
+        <button class="btn btn-ghost btn-sm" onclick="togglePlan('${merchantId}','${p.id}',${!p.active},this)">${p.active?'Désactiver':'Activer'}</button>
+        <button class="btn btn-warn btn-sm" onclick="deletePlan('${merchantId}','${p.id}',this)">×</button>
+      </div>`).join('');
+  } catch(e) { section.innerHTML = `<div class="text-muted" style="font-size:12px">${esc(e.message)}</div>`; }
+}
+
+function openAddPlan(merchantId) {
+  const formId = `addPlanForm_${merchantId}`;
+  if (document.getElementById(formId)) return;
+  const section = document.getElementById(`plansSection_${merchantId}`);
+  if (!section) return;
+  const ops = allOperators.length
+    ? allOperators.map(op => `<option value="${esc(op.id)}">${esc(op.name)}</option>`).join('')
+    : '<option value="orange">Orange Money</option><option value="moov">Moov Money</option>';
+  section.insertAdjacentHTML('beforeend', `
+    <div id="${formId}" style="margin-top:10px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius)">
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Nom du plan *</label>
+          <input type="text" id="pName_${merchantId}" placeholder="Abonnement mensuel" style="width:100%;padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:12px">
+        </div>
+        <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Montant (FCFA) *</label>
+          <input type="number" id="pAmount_${merchantId}" placeholder="1000" min="1" style="width:100%;padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:12px">
+        </div>
+        <div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Opérateur <span style="opacity:.6">— optionnel</span></label>
+          <select id="pOp_${merchantId}" style="width:100%;padding:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:12px">
+            <option value="">Tous</option>${ops}
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" onclick="submitAddPlan('${merchantId}',this)">Ajouter</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('${formId}').remove()">Annuler</button>
+      </div>
+    </div>
+  `);
+}
+
+async function submitAddPlan(merchantId, btn) {
+  btn.disabled = true; btn.textContent = '…';
+  const name = document.getElementById(`pName_${merchantId}`).value.trim();
+  const amount = parseInt(document.getElementById(`pAmount_${merchantId}`).value);
+  const operator = document.getElementById(`pOp_${merchantId}`).value || undefined;
+  if (!name) { toast('Nom obligatoire', true); btn.disabled = false; btn.textContent = 'Ajouter'; return; }
+  if (!amount || amount <= 0) { toast('Montant invalide', true); btn.disabled = false; btn.textContent = 'Ajouter'; return; }
+  try {
+    await api('POST', `/admin/merchants/${merchantId}/plans`, { name, amount, operator });
+    document.getElementById(`addPlanForm_${merchantId}`)?.remove();
+    toast('Plan ajouté');
+    loadPlans(merchantId);
+  } catch(e) { toast(e.message, true); btn.disabled = false; btn.textContent = 'Ajouter'; }
+}
+
+async function togglePlan(merchantId, planId, active, btn) {
+  btn.disabled = true;
+  try {
+    await api('POST', `/admin/merchants/${merchantId}/plans/${planId}/toggle`, { active });
+    loadPlans(merchantId);
+  } catch(e) { toast(e.message, true); btn.disabled = false; }
+}
+
+async function deletePlan(merchantId, planId, btn) {
+  if (!confirm('Supprimer ce plan ?')) return;
+  btn.disabled = true;
+  try {
+    await api('DELETE', `/admin/merchants/${merchantId}/plans/${planId}`);
+    toast('Plan supprimé');
+    loadPlans(merchantId);
   } catch(e) { toast(e.message, true); btn.disabled = false; }
 }
 
@@ -1080,7 +1174,17 @@ function openModal(type, arg1, arg2, arg3) {
         <div class="field"><label>Nom *</label><input type="text" id="mName" placeholder="Orange Shop Ouaga"></div>
         <div class="field"><label>Téléphone</label><input type="text" id="mPhone" placeholder="22670000000"></div>
       </div>
-      <div class="field mt12"><label>Webhook générique</label><input type="url" id="mWebhook" placeholder="https://..."></div>`;
+      <div class="field mt12"><label>Webhook générique</label><input type="url" id="mWebhook" placeholder="https://..."></div>
+      <div class="field mt12"><label>Mode de paiement <span class="text-muted">— non modifiable après création</span></label>
+        <div style="display:flex;gap:16px;margin-top:6px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="radio" name="mMode" value="intent" checked> <span>Intention <span class="text-muted" style="font-size:11px">— le serveur crée une intention avant chaque paiement</span></span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="radio" name="mMode" value="plan"> <span>Plan <span class="text-muted" style="font-size:11px">— montants fixes prédéfinis, aucune intention requise</span></span>
+          </label>
+        </div>
+      </div>`;
     footer.innerHTML = `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="createMerchant()">Créer</button>`;
   } else if (type === 'create-operator') {
     title.textContent = 'Créer un opérateur';
@@ -1160,11 +1264,13 @@ async function createMerchant() {
   if (!name) { toast('Nom obligatoire', true); return; }
   const btn = document.querySelector('#modal-footer .btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  const modeEl = document.querySelector('input[name="mMode"]:checked');
   try {
     await api('POST', '/admin/merchants', {
       name,
       phone: document.getElementById('mPhone').value.trim() || undefined,
       webhook_url: document.getElementById('mWebhook').value.trim() || undefined,
+      payment_mode: modeEl ? modeEl.value : 'intent',
     });
     closeModal();
     toast('Marchand créé');

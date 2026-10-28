@@ -6,6 +6,7 @@ const { transaction } = require('../db');
 const { ApiError } = require('../lib/errors');
 const merchants = require('../services/merchants');
 const wallets = require('../services/wallets');
+const plans = require('../services/plans');
 const devices = require('../services/devices');
 const operators = require('../services/operators');
 const parser = require('../services/parser');
@@ -157,6 +158,29 @@ function adminRoutes(ctx) {
   r.delete('/merchants/:id/wallets/:walletId', async (req, res) => {
     await wallets.getMerchantWallet(ctx, req.params.id, req.params.walletId);
     await ctx.db.prepare('DELETE FROM wallets WHERE id = ? AND merchant_id = ?').run(req.params.walletId, req.params.id);
+    res.json({ ok: true });
+  });
+
+  // ─── Plans de paiement (admin) ────────────────────────────────────────────
+
+  r.get('/merchants/:id/plans', async (req, res) => {
+    res.json({ data: await plans.listPlans(ctx, req.params.id) });
+  });
+
+  r.post('/merchants/:id/plans', async (req, res) => {
+    const row = await ctx.db.prepare("SELECT * FROM merchants WHERE id=? AND status='active'").get(req.params.id);
+    if (!row) throw new ApiError(404, 'merchant_not_found', 'Marchand introuvable');
+    if (row.payment_mode !== 'plan') throw new ApiError(409, 'wrong_payment_mode', 'Ce marchand utilise le mode intent');
+    res.status(201).json(await plans.createPlan(ctx, row, req.body || {}));
+  });
+
+  r.post('/merchants/:id/plans/:planId/toggle', async (req, res) => {
+    const active = (req.body || {}).active !== false;
+    res.json(await plans.togglePlan(ctx, req.params.id, req.params.planId, active));
+  });
+
+  r.delete('/merchants/:id/plans/:planId', async (req, res) => {
+    await plans.deletePlan(ctx, req.params.id, req.params.planId);
     res.json({ ok: true });
   });
 

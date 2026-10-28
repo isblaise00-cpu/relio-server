@@ -11,6 +11,7 @@ const { transaction } = require('../db');
 const parser = require('./parser');
 const wallets = require('./wallets');
 const intents = require('./intents');
+const plans = require('./plans');
 const reviews = require('./reviews');
 const events = require('./events');
 
@@ -198,17 +199,20 @@ async function toReview(ctx, sms, reason, candidateIntentId, now) {
 }
 
 async function handleCredit(ctx, sms, wallet, now) {
-  const cand = await candidatesFor(ctx, sms, now);
-
-  // Échec dur : ID de transaction déjà vu.
+  // Échec dur : ID de transaction déjà vu (dans les deux modes).
   if (await isDuplicateTxn(ctx, sms)) {
+    // En mode plan on n'a pas encore de candidat intent, on rejette directement.
+    const merchant = await ctx.db.prepare('SELECT payment_mode FROM merchants WHERE id = ?').get(sms.merchant_id);
+    const mode = merchant ? merchant.payment_mode : 'intent';
+    if (mode === 'plan') {
+      return updateSms(ctx, sms.id, { status: 'rejected', reasons: JSON.stringify(['duplicate_transaction']) });
+    }
+    const cand = await candidatesFor(ctx, sms, now);
     if (cand.exact) return toReview(ctx, sms, 'suspected_fraud_duplicate', cand.exact.id, now);
     return updateSms(ctx, sms.id, { status: 'rejected', reasons: JSON.stringify(['duplicate_transaction']) });
   }
 
   // Mise à jour du solde du portefeuille : informative, jamais bloquante.
-  // L'expéditeur étant un identifiant alphanumérique opérateur (OrangeMoney, MoovMoney…),
-  // la continuité du solde n'est pas nécessaire pour confirmer l'authenticité du SMS.
   if (wallet) {
     if (wallet.balance !== null && wallet.balance + sms.amount === sms.new_balance) {
       await wallets.setBalance(ctx, wallet.id, sms.new_balance, now);
@@ -217,7 +221,24 @@ async function handleCredit(ctx, sms, wallet, now) {
     }
   }
 
-  // Correspondance avec une intention de paiement.
+  const merchant = await ctx.db.prepare('SELECT payment_mode FROM merchants WHERE id = ?').get(sms.merchant_id);
+  const mode = merchant ? merchant.payment_mode : 'intent';
+
+  // ── Mode plan : correspondance sur un plan de paiement prédéfini ─────────
+  if (mode === 'plan') {
+    const plan = await plans.findMatchingPlan(ctx, sms);
+    if (plan) {
+      const intent = await intents.createPlanIntent(ctx, plan, sms, now);
+      await intents.succeedIntent(ctx, intent, sms, 'auto', now);
+      await updateSms(ctx, sms.id, { status: 'matched', intent_id: intent.id, reasons: '[]', hold_until: null, candidate_intent_id: null });
+      return;
+    }
+    await updateSms(ctx, sms.id, { reasons: '[]' });
+    return toReview(ctx, await getSms(ctx, sms.id), 'no_matching_plan', null, now);
+  }
+
+  // ── Mode intent : correspondance avec une intention de paiement ──────────
+  const cand = await candidatesFor(ctx, sms, now);
   if (cand.exact) {
     await intents.succeedIntent(ctx, cand.exact, sms, 'auto', now);
     await updateSms(ctx, sms.id, { status: 'matched', intent_id: cand.exact.id, reasons: '[]', hold_until: null, candidate_intent_id: null });

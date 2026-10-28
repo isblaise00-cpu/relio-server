@@ -30,6 +30,8 @@ function validateWebhookUrl(ctx, url) {
   return parsed.toString();
 }
 
+const PAYMENT_MODES = ['intent', 'plan'];
+
 function serializeMerchant(row) {
   return {
     id: row.id,
@@ -40,15 +42,20 @@ function serializeMerchant(row) {
     webhook_url: row.webhook_url,
     webhook_success: row.webhook_success || null,
     webhook_failure: row.webhook_failure || null,
+    payment_mode: row.payment_mode || 'intent',
     status: row.status,
     created_at: iso(row.created_at),
   };
 }
 
 /** Crée un marchand. Les secrets ne sont renvoyés qu'une seule fois. */
-async function createMerchant(ctx, { name, phone, webhook_url } = {}) {
+async function createMerchant(ctx, { name, phone, webhook_url, payment_mode } = {}) {
   if (typeof name !== 'string' || !name.trim() || name.length > 100) {
     throw new ApiError(400, 'invalid_name', 'name est obligatoire (100 caractères max)');
+  }
+  const mode = payment_mode || 'intent';
+  if (!PAYMENT_MODES.includes(mode)) {
+    throw new ApiError(400, 'invalid_payment_mode', `payment_mode doit être l'un de : ${PAYMENT_MODES.join(', ')}`);
   }
   const webhookUrl = validateWebhookUrl(ctx, webhook_url);
   const phoneVal = typeof phone === 'string' && phone.trim() ? phone.trim() : null;
@@ -58,10 +65,10 @@ async function createMerchant(ctx, { name, phone, webhook_url } = {}) {
   const webhookSecret = newSecret('whsec');
   await ctx.db
     .prepare(
-      `INSERT INTO merchants (id, name, phone, api_key, api_secret_enc, webhook_url, webhook_secret_enc, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
+      `INSERT INTO merchants (id, name, phone, api_key, api_secret_enc, webhook_url, webhook_secret_enc, status, payment_mode, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
     )
-    .run(id, name.trim(), phoneVal, apiKey, ctx.vault.encrypt(apiSecret), webhookUrl, ctx.vault.encrypt(webhookSecret), Date.now());
+    .run(id, name.trim(), phoneVal, apiKey, ctx.vault.encrypt(apiSecret), webhookUrl, ctx.vault.encrypt(webhookSecret), mode, Date.now());
   const row = await ctx.db.prepare('SELECT * FROM merchants WHERE id = ?').get(id);
   return {
     merchant: serializeMerchant(row),
@@ -98,4 +105,4 @@ async function deleteMerchant(ctx, id) {
   await ctx.db.prepare("UPDATE merchants SET status = 'deleted' WHERE id = ?").run(id);
 }
 
-module.exports = { createMerchant, findByApiKey, updateMerchant, serializeMerchant, deleteMerchant };
+module.exports = { createMerchant, findByApiKey, updateMerchant, serializeMerchant, deleteMerchant, PAYMENT_MODES };

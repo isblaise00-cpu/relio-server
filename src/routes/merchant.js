@@ -6,6 +6,7 @@ const { ApiError } = require('../lib/errors');
 const merchants = require('../services/merchants');
 const wallets = require('../services/wallets');
 const intents = require('../services/intents');
+const plans = require('../services/plans');
 const devices = require('../services/devices');
 const reviews = require('../services/reviews');
 const events = require('../services/events');
@@ -48,13 +49,19 @@ function merchantRoutes(ctx) {
     res.json(out);
   });
 
-  // --- Intentions de paiement ------------------------------------------------
+  // --- Intentions de paiement (mode "intent" uniquement) --------------------
   r.post('/payment-intents', async (req, res) => {
+    if (req.merchant.payment_mode === 'plan') {
+      throw new ApiError(409, 'wrong_payment_mode', 'Ce marchand utilise le mode plan — les intentions de paiement ne sont pas disponibles');
+    }
     const { intent, created } = await tx(() => intents.createIntent(ctx, req.merchant, req.body || {}));
     res.status(created ? 201 : 200).json(await intents.serializeIntent(ctx, intent, { withInstructions: true }));
   });
 
   r.get('/payment-intents', async (req, res) => {
+    if (req.merchant.payment_mode === 'plan') {
+      throw new ApiError(409, 'wrong_payment_mode', 'Ce marchand utilise le mode plan — les intentions de paiement ne sont pas disponibles');
+    }
     const reference = req.query.reference;
     if (typeof reference !== 'string' || !reference) {
       throw new ApiError(400, 'missing_reference', 'Paramètre ?reference= obligatoire');
@@ -65,13 +72,50 @@ function merchantRoutes(ctx) {
   });
 
   r.get('/payment-intents/:id', async (req, res) => {
+    if (req.merchant.payment_mode === 'plan') {
+      throw new ApiError(409, 'wrong_payment_mode', 'Ce marchand utilise le mode plan — les intentions de paiement ne sont pas disponibles');
+    }
     const row = await intents.getMerchantIntent(ctx, req.merchant.id, req.params.id);
     res.json(await intents.serializeIntent(ctx, row, { withInstructions: true }));
   });
 
   r.post('/payment-intents/:id/cancel', async (req, res) => {
+    if (req.merchant.payment_mode === 'plan') {
+      throw new ApiError(409, 'wrong_payment_mode', 'Ce marchand utilise le mode plan — les intentions de paiement ne sont pas disponibles');
+    }
     const row = await tx(() => intents.cancelIntent(ctx, req.merchant.id, req.params.id));
     res.json(await intents.serializeIntent(ctx, row));
+  });
+
+  // --- Plans de paiement (mode "plan" uniquement) ----------------------------
+  r.get('/payment-plans', async (req, res) => {
+    if (req.merchant.payment_mode !== 'plan') {
+      throw new ApiError(409, 'wrong_payment_mode', 'Ce marchand utilise le mode intent — les plans de paiement ne sont pas disponibles');
+    }
+    res.json({ data: await plans.listPlans(ctx, req.merchant.id) });
+  });
+
+  r.post('/payment-plans', async (req, res) => {
+    if (req.merchant.payment_mode !== 'plan') {
+      throw new ApiError(409, 'wrong_payment_mode', 'Ce marchand utilise le mode intent — les plans de paiement ne sont pas disponibles');
+    }
+    res.status(201).json(await tx(() => plans.createPlan(ctx, req.merchant, req.body || {})));
+  });
+
+  r.post('/payment-plans/:id/toggle', async (req, res) => {
+    if (req.merchant.payment_mode !== 'plan') {
+      throw new ApiError(409, 'wrong_payment_mode', 'Ce marchand utilise le mode intent — les plans de paiement ne sont pas disponibles');
+    }
+    const active = (req.body || {}).active !== false;
+    res.json(await plans.togglePlan(ctx, req.merchant.id, req.params.id, active));
+  });
+
+  r.delete('/payment-plans/:id', async (req, res) => {
+    if (req.merchant.payment_mode !== 'plan') {
+      throw new ApiError(409, 'wrong_payment_mode', 'Ce marchand utilise le mode intent — les plans de paiement ne sont pas disponibles');
+    }
+    await plans.deletePlan(ctx, req.merchant.id, req.params.id);
+    res.json({ ok: true });
   });
 
   // --- Téléphones ---------------------------------------------------------------

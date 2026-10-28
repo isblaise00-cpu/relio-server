@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS merchants (
   webhook_secret_enc TEXT NOT NULL,
   status             VARCHAR(20) NOT NULL DEFAULT 'active',
   phone              VARCHAR(30),
+  payment_mode       VARCHAR(20) NOT NULL DEFAULT 'intent',
   created_at         BIGINT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -58,6 +59,17 @@ CREATE TABLE IF NOT EXISTS devices (
   FOREIGN KEY (merchant_id) REFERENCES merchants(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS payment_plans (
+  id          VARCHAR(64) PRIMARY KEY,
+  merchant_id VARCHAR(64) NOT NULL,
+  name        VARCHAR(200) NOT NULL,
+  amount      BIGINT NOT NULL,
+  operator    VARCHAR(32) DEFAULT NULL,
+  active      TINYINT(1) NOT NULL DEFAULT 1,
+  created_at  BIGINT NOT NULL,
+  FOREIGN KEY (merchant_id) REFERENCES merchants(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS payment_intents (
   id             VARCHAR(64) PRIMARY KEY,
   merchant_id    VARCHAR(64) NOT NULL,
@@ -70,6 +82,7 @@ CREATE TABLE IF NOT EXISTS payment_intents (
   confirmation   VARCHAR(20),
   sms_id         VARCHAR(64),
   transaction_id VARCHAR(64),
+  plan_id        VARCHAR(64),
   metadata       TEXT,
   expires_at     BIGINT NOT NULL,
   created_at     BIGINT NOT NULL,
@@ -263,6 +276,18 @@ async function initSchema(db) {
   for (const stmt of stmts) {
     await db.pool.execute(stmt);
   }
+  // Migrations : colonnes ajoutées après le déploiement initial.
+  // ER_DUP_FIELDNAME = colonne déjà présente (idempotent).
+  const migrations = [
+    `ALTER TABLE merchants ADD COLUMN payment_mode VARCHAR(20) NOT NULL DEFAULT 'intent'`,
+    `ALTER TABLE payment_intents ADD COLUMN plan_id VARCHAR(64) DEFAULT NULL`,
+  ];
+  for (const stmt of migrations) {
+    try { await db.pool.execute(stmt); } catch (err) {
+      if (err.code !== 'ER_DUP_FIELDNAME') throw err;
+    }
+  }
+
   // Les index utilisent "IF NOT EXISTS" qui n'est pas supporté par MySQL < 8.0.
   // On les crée séparément en ignorant les erreurs "Duplicate key name".
   const idxStmts = INDEXES.split(';').map((s) => s.trim()).filter(Boolean);
